@@ -4,9 +4,9 @@ namespace Netsells\PassportClientCookie\Middleware;
 
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
-use Symfony\Component\HttpFoundation\Cookie;
-use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class ApiTokenCookieFactory
 {
@@ -40,11 +40,11 @@ class ApiTokenCookieFactory
     /**
      * Create a new API token cookie.
      *
-     * @param  mixed  $clientId
+     * @param  mixed  $userId
      * @param  string  $csrfToken
      * @return \Symfony\Component\HttpFoundation\Cookie
      */
-    public function make($clientId, $csrfToken)
+    public function make($userId, $csrfToken)
     {
         $config = $this->config->get('session');
 
@@ -52,27 +52,29 @@ class ApiTokenCookieFactory
 
         return new Cookie(
             config('passport-client-cookie.cookie_name', 'laravel_client_token'),
-            $this->createToken($clientId, $csrfToken, $expiration),
+            $this->createToken($userId, $csrfToken, $expiration),
             $expiration,
             $config['path'],
             $config['domain'],
             $config['secure'],
-            true
+            true,
+            false,
+            $config['same_site'] ?? null
         );
     }
 
     /**
      * Create a new JWT token for the given user ID and CSRF token.
      *
-     * @param  mixed  $clientId
+     * @param  mixed  $userId
      * @param  string  $csrfToken
      * @param  \Carbon\Carbon  $expiration
      * @return string
      */
-    protected function createToken($clientId, $csrfToken, Carbon $expiration)
+    protected function createToken($userId, $csrfToken, Carbon $expiration)
     {
         return JWT::encode([
-            'sub' => $clientId,
+            'sub' => $userId,
             'csrf' => $csrfToken,
             'expiry' => $expiration->getTimestamp(),
         ], $this->encrypter->getKey());

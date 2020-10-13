@@ -4,13 +4,14 @@ namespace Netsells\PassportClientCookie\Middleware;
 
 use Closure;
 use Firebase\JWT\JWT;
+use Illuminate\Foundation\Application;
+use Illuminate\Cookie\CookieValuePrefix;
+use League\OAuth2\Server\ResourceServer;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Encryption\Encrypter;
-use Illuminate\Foundation\Application;
-use Laravel\Passport\Http\Middleware\CheckClientCredentials as LaravelCheckClientCredentials;
 use League\OAuth2\Server\Exception\OAuthServerException;
-use League\OAuth2\Server\ResourceServer;
 use Symfony\Bridge\PsrHttpMessage\Factory\DiactorosFactory;
+use Laravel\Passport\Http\Middleware\CheckClientCredentials as LaravelCheckClientCredentials;
 
 class CheckClientCredentials extends LaravelCheckClientCredentials
 {
@@ -127,8 +128,9 @@ class CheckClientCredentials extends LaravelCheckClientCredentials
      */
     protected function decodeJwtTokenCookie($request)
     {
+        $cookie = $this->encrypter->decrypt($request->cookie(config('passport-client-cookie.cookie_name', 'laravel_client_token')));
         return (array) JWT::decode(
-            $this->encrypter->decrypt($request->cookie(config('passport-client-cookie.cookie_name', 'laravel_client_token')), false),
+            CookieValuePrefix::remove($cookie),
             $this->encrypter->getKey(), ['HS256']
         );
     }
@@ -143,7 +145,23 @@ class CheckClientCredentials extends LaravelCheckClientCredentials
     protected function validCsrf($token, $request)
     {
         return isset($token['csrf']) && hash_equals(
-                $token['csrf'], (string) $request->header('X-CSRF-TOKEN')
-            );
+            $token['csrf'], (string) $this->getTokenFromRequest($request)
+        );
+    }
+
+    /**
+     * Get the CSRF token from the request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return string
+     */
+    protected function getTokenFromRequest($request)
+    {
+        $token = $request->header('X-CSRF-TOKEN');
+        if (! $token && $header = $request->header('X-XSRF-TOKEN')) {
+            $token = CookieValuePrefix::remove($this->encrypter->decrypt($header, static::serialized()));
+        }
+
+        return $token;
     }
 }
